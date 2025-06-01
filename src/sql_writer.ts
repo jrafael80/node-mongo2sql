@@ -60,14 +60,19 @@ export default function toSql(mongoQuery: string): string | null {
         if (!checkPunctuator('{')) {
             advancePunctuator('{');
         }
+        let isFirst = true; // Flag to handle the first key-value pair
         while (!checkPunctuator('}')) {
             const keyToken = advance(); // The key (identifier or logical operator)
+            if (isFirst && checkPunctuator('}')) {
+                return; // If we hit '}', stop parsing, only occure in empty object. 
+            }
             if (!check({ type: TokenType.IDENTIFIER }) && !check({ type: TokenType.OPERATOR })) {
                 throw new Error(`Syntax Error: Expected an IDENTIFIER or OPERATOR as key, but got ${keyToken.type}`);
             }
             advancePunctuator(':'); // Advance to the colon after the key
             yield keyToken;
             advance();
+            isFirst = false;
         }
     }
 
