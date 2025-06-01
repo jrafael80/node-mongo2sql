@@ -1,13 +1,20 @@
 
 export enum TokenType {
   PUNCTUATOR = 'PUNCTUATOR',
+  STRING = 'STRING',
+  NUMBER = 'NUMBER',
+  OPERATOR = 'OPERATOR',
   IDENTIFIER = 'IDENTIFIER',
+  ERROR = 'ERROR',
   UNKNOWN = 'UNKNOWN'
 }
 
 export type MongoToken = {
-  type: TokenType;
+  type: Exclude<TokenType, TokenType.NUMBER>;
   value: string;
+} | {
+  type: TokenType.NUMBER;
+  value: number;
 } 
 
 /**
@@ -23,7 +30,8 @@ export default function *mongoLexer(input:string): IterableIterator<MongoToken> 
   const length = input.length;
 
   const whitespace = /\s/;
-  const letters = /["a-zA-Z_]/;
+  const digits = /\d/;
+  const letters = /[a-zA-Z_]/;
   const punctuators = ['.', '(', ')', '{', '}', ':', ',', ';', '[', ']'];
 
   while (cursor < length) {
@@ -40,13 +48,52 @@ export default function *mongoLexer(input:string): IterableIterator<MongoToken> 
       continue;
     }
 
+    if (char === "'" || char === '"') {
+      const quoteChar = char;
+      let value = '';
+      cursor++;
+      while (cursor < length && input[cursor] !== quoteChar) {
+        value += input[cursor];
+        cursor++;
+      }
+      if (input[cursor] === quoteChar) {
+        cursor++;
+        yield { type: TokenType.STRING, value };
+        continue;
+      } else {
+        yield { type: TokenType.ERROR, value: `Unclosed string starting at index ${cursor - value.length - 1}` };
+        return;
+      }
+    }
+
+    if (digits.test(char)) {
+      let value = '';
+      while (cursor < length && (digits.test(input[cursor]) || input[cursor] === '.')) {
+        value += input[cursor];
+        cursor++;
+      }
+      yield { type: TokenType.NUMBER, value: parseFloat(value) };
+      continue;
+    }
+
+    if (char === '$') {
+        let value = char;
+        cursor++;
+        while (cursor < length && letters.test(input[cursor])) {
+            value += input[cursor];
+            cursor++;
+        }
+        yield { type: TokenType.OPERATOR, value: value };
+        continue;
+    }
+
     if (letters.test(char)) {
       let value = '';
       while (cursor < length && (letters.test(input[cursor]))) {
         value += input[cursor];
         cursor++;
       }
-      yield { type: TokenType.IDENTIFIER, value: value };
+      yield { type: TokenType.IDENTIFIER, value };
       continue;
     }
 
