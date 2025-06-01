@@ -173,5 +173,5 @@ export class MongoLexer {
  */
 export async function *asyncMongoLexer(inputStream: AsyncIterable<string>): AsyncGenerator<MongoToken> {
     const lexer = new MongoLexer();
-    return lexer.mongoQueryLexer(inputStream);
+    yield* lexer.mongoQueryLexer(inputStream);
 }
