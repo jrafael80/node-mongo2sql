@@ -1,4 +1,4 @@
-import mongoLexer, { MongoToken, TokenType, StringMongoToken } from './mongo_lexer';
+import { mongoLexer, MongoToken, TokenType, StringMongoToken } from './mongo';
 
 export default function toSql(mongoQuery: string): string | null {
     const tokensIterator = mongoLexer(mongoQuery);

@@ -1,4 +1,4 @@
-import mongoLexer, { TokenType } from '../src/mongo_lexer';
+import { mongoLexer, TokenType } from '../src/mongo';
 
 
 describe('Mongo Lexer Tests', () => {
