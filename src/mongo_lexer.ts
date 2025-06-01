@@ -4,6 +4,8 @@ export enum TokenType {
   STRING = 'STRING',
   NUMBER = 'NUMBER',
   OPERATOR = 'OPERATOR',
+  BOOLEAN = 'BOOLEAN',
+  NULL = 'NULL',
   IDENTIFIER = 'IDENTIFIER',
   ERROR = 'ERROR',
   UNKNOWN = 'UNKNOWN'
@@ -15,7 +17,15 @@ export type MongoToken = {
 } | {
   type: TokenType.NUMBER;
   value: number;
-} 
+} | 
+{
+  type: TokenType.BOOLEAN;
+  value: boolean;
+} | 
+{
+  type: TokenType.NULL;
+  value: null;
+}
 
 /**
  * MongoDB Lexer
@@ -93,7 +103,13 @@ export default function *mongoLexer(input:string): IterableIterator<MongoToken> 
         value += input[cursor];
         cursor++;
       }
-      yield { type: TokenType.IDENTIFIER, value };
+      if (value === 'true' || value === 'false') {
+        yield { type: TokenType.BOOLEAN, value: value === 'true' };
+      } else if (value === 'null') {
+        yield { type: TokenType.NULL, value: null };
+      } else {
+        yield { type: TokenType.IDENTIFIER, value: value };
+      }
       continue;
     }
 
