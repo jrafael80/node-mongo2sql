@@ -10,11 +10,13 @@ export enum TokenType {
   ERROR = 'ERROR',
   UNKNOWN = 'UNKNOWN'
 }
-
-export type MongoToken = {
-  type: Exclude<TokenType, TokenType.NUMBER>;
+export type StringTokenType = Exclude<TokenType, TokenType.NUMBER | TokenType.BOOLEAN | TokenType.NULL>
+export type StringMongoToken = {
+  type: StringTokenType;
   value: string;
-} | {
+}
+
+export type MongoToken = StringMongoToken | {
   type: TokenType.NUMBER;
   value: number;
 } | 

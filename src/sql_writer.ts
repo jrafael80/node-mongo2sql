@@ -1,4 +1,4 @@
-import mongoLexer, { MongoToken, TokenType } from './mongo_lexer';
+import mongoLexer, { MongoToken, TokenType, StringMongoToken } from './mongo_lexer';
 
 export default function toSql(mongoQuery: string): string | null {
     const tokensIterator = mongoLexer(mongoQuery);
@@ -21,7 +21,7 @@ export default function toSql(mongoQuery: string): string | null {
     };
 
     // Helper to advance to the next token and verify type/value
-    function advance(opts: { type: TokenType.IDENTIFIER, value?: string; }): { type: TokenType.IDENTIFIER, value: string; };
+    function advance(opts: StringMongoToken): StringMongoToken;
     function advance(opts?: Partial<MongoToken>): MongoToken;
     function advance({ type: expectedType, value: expectedValue }: Partial<MongoToken> = {}): MongoToken {
         currentToken = tokensIterator.next().value;
