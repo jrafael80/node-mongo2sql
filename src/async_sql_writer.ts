@@ -1,10 +1,10 @@
 import { asyncMongoLexer, MongoToken, TokenType, StringMongoToken } from './mongo';
 import { AsyncIterable2Array } from './utils';
 
-export default async function toSql(mongoQuery: AsyncIterable<string>): Promise<string | null> {
+export default async function *toSql(mongoQuery: AsyncIterable<string>): AsyncGenerator<string> {
     const tokensIterator = asyncMongoLexer(mongoQuery);
     let currentToken: MongoToken = (await tokensIterator.next()).value; // Current token we are processing
-
+    
     // Mapping MongoDB operators to SQL
     const operatorMap: { [K: string]: string } = {
         '$eq': '=',
@@ -155,10 +155,12 @@ export default async function toSql(mongoQuery: AsyncIterable<string>): Promise<
     let collectionName = '';
     let selectFields = [];
     let whereConditions = [];
-
-    try {
+     
+    while (true) try {
         // 1. Expect 'db'
-        check({ type: TokenType.IDENTIFIER, value: 'db' });
+        if (!check({ type: TokenType.IDENTIFIER, value: 'db' })) {
+            await advance({ type: TokenType.IDENTIFIER, value: 'db' });
+        }
         await advancePunctuator('.');
 
         // 2. Get collection name
@@ -201,10 +203,10 @@ export default async function toSql(mongoQuery: AsyncIterable<string>): Promise<
         if (whereConditions.length > 0) {
             sql += ` WHERE ${whereConditions.join(' AND ')}`; // Main object conditions are joined with AND
         }
-        return sql + ';';
+        yield sql + ';';
 
     } catch (error: any) {
         console.error("Translation Error:", error.message);
-        return null; // Or throw the error
+        return; // Or throw the error
     }
 }
