@@ -1,31 +1,4 @@
-
-export enum TokenType {
-  PUNCTUATOR = 'PUNCTUATOR',
-  STRING = 'STRING',
-  NUMBER = 'NUMBER',
-  OPERATOR = 'OPERATOR',
-  BOOLEAN = 'BOOLEAN',
-  NULL = 'NULL',
-  IDENTIFIER = 'IDENTIFIER',
-  ERROR = 'ERROR',
-  UNKNOWN = 'UNKNOWN'
-}
-
-export type MongoToken = {
-  type: Exclude<TokenType, TokenType.NUMBER>;
-  value: string;
-} | {
-  type: TokenType.NUMBER;
-  value: number;
-} | 
-{
-  type: TokenType.BOOLEAN;
-  value: boolean;
-} | 
-{
-  type: TokenType.NULL;
-  value: null;
-}
+import { MongoToken, TokenType } from "./models";
 
 /**
  * MongoDB Lexer

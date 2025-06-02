@@ -1,7 +1,14 @@
 import toSql from '../src/sql_writer';
+import asyncToSql from '../src/async_sql_writer';
+import { AsyncIterable2Array, string2Stream } from '../src/utils';
+import { asyncMongoLexer } from '../src/mongo';
 
-describe('Mongo to SQL Translation Tests', () => {
-    
+describe.each([
+  ['sync', (input: string) => Promise.resolve(toSql(input))],
+  ['async', (input: string) => asyncToSql(string2Stream(input))],
+])
+  ('Mongo %s Lexer Tests', (type, lexer) => {
+
     it.each([
         ["db.users.find({ });", "SELECT * FROM users;"],
         ["db.users.find({ name: 'john doe', age: { $gt: 30 } });", "SELECT * FROM users WHERE name = 'john doe' AND age > 30;"],
