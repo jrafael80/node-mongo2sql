@@ -1,8 +1,9 @@
-import { mongoLexer, MongoToken, TokenType, StringMongoToken } from './mongo';
+import { asyncMongoLexer, MongoToken, TokenType, StringMongoToken } from './mongo';
+import { AsyncIterable2Array } from './utils';
 
-export default function toSql(mongoQuery: string): string | null {
-    const tokensIterator = mongoLexer(mongoQuery);
-    let currentToken: MongoToken = tokensIterator.next().value; // Current token we are processing
+export default async function toSql(mongoQuery: AsyncIterable<string>): Promise<string | null> {
+    const tokensIterator = asyncMongoLexer(mongoQuery);
+    let currentToken: MongoToken = (await tokensIterator.next()).value; // Current token we are processing
 
     // Mapping MongoDB operators to SQL
     const operatorMap: { [K: string]: string } = {
@@ -21,10 +22,10 @@ export default function toSql(mongoQuery: string): string | null {
     };
 
     // Helper to advance to the next token and verify type/value
-    function advance(opts: Partial<StringMongoToken>): StringMongoToken;
-    function advance(opts?: Partial<MongoToken>): MongoToken;
-    function advance({ type: expectedType, value: expectedValue }: Partial<MongoToken> = {}): MongoToken {
-        currentToken = tokensIterator.next().value;
+    async function advance(opts: Partial<StringMongoToken>): Promise<StringMongoToken>;
+    async function advance(opts?: Partial<MongoToken>): Promise<MongoToken>;
+    async function advance({ type: expectedType, value: expectedValue }: Partial<MongoToken> = {}): Promise<MongoToken> {
+        currentToken = (await tokensIterator.next()).value;
         if (currentToken && currentToken.type === 'ERROR') {
             throw new Error(`Lexer Error: ${currentToken.value}`);
         }
@@ -37,10 +38,10 @@ export default function toSql(mongoQuery: string): string | null {
         return currentToken;
     };
 
-    const advancePunctuator = (value: string | undefined) => advance({ type: TokenType.PUNCTUATOR, value });
+    const advancePunctuator = async (value: string | undefined) => await advance({ type: TokenType.PUNCTUATOR, value });
     const checkPunctuator = (value: string | undefined) => check({ type: TokenType.PUNCTUATOR, value });
 
-    // Function to format values for SQL (with quoting)
+    // function to format values for SQL (with quoting)
     function formatSqlValue(value: any): string {
         if (typeof value === 'string') {
             return `'${value.replace(/'/g, "''")}'`; // Escape single quotes for SQL
@@ -55,45 +56,45 @@ export default function toSql(mongoQuery: string): string | null {
     };
 
     // 6. parseObject: Reads a general object { key: value, ... }
-    // `parsePropertyFn` is a function that knows how to parse each key-value pair and return its SQL fragment
-    function* parseObject(): IterableIterator<MongoToken> {
+    // `parsePropertyFn` is a async function that knows how to parse each key-value pair and return its SQL fragment
+    async function* parseObject(): AsyncGenerator<MongoToken> {
         if (!checkPunctuator('{')) {
-            advancePunctuator('{');
+            await advancePunctuator('{');
         }
         let isFirst = true; // Flag to handle the first key-value pair
         while (!checkPunctuator('}')) {
-            const keyToken = advance(); // The key (identifier or logical operator)
+            const keyToken = await advance(); // The key (identifier or logical operator)
             if (isFirst && checkPunctuator('}')) {
                 return; // If we hit '}', stop parsing, only occure in empty object. 
             }
             if (!check({ type: TokenType.IDENTIFIER }) && !check({ type: TokenType.OPERATOR })) {
                 throw new Error(`Syntax Error: Expected an IDENTIFIER or OPERATOR as key, but got ${keyToken.type}`);
             }
-            advancePunctuator(':'); // Advance to the colon after the key
+            await advancePunctuator(':'); // await advance to the colon after the key
             yield keyToken;
-            advance();
+            await advance();
             isFirst = false;
         }
     }
 
-    function* parseArray(): IterableIterator<MongoToken> {
+    async function* parseArray(): AsyncGenerator<MongoToken> {
         if (!checkPunctuator('[')) {
-            advancePunctuator('[');
+            await advancePunctuator('[');
         }
         while (!checkPunctuator(']')) {
             yield currentToken;
-            advance();
+            await advance();
         }
     }
 
-    function* parseLogicalOperators(): IterableIterator<string> {
-        for (const token of parseArray()) {
-            yield `(${[...parseQueryObjectContent()].join(' AND ')})`;
+    async function* parseLogicalOperators(): AsyncGenerator<string> {
+        for await (const token of parseArray()) {
+            yield `(${(await AsyncIterable2Array(parseQueryObjectContent())).join(' AND ')})`;
         }
     }
-    function* parseInOperators(): IterableIterator<string> {
-        for (const token of parseArray()) {
-            advance();
+    async function* parseInOperators(): AsyncGenerator<string> {
+        for await (const token of parseArray()) {
+            await advance();
             if (currentToken.type !== TokenType.STRING && currentToken.type !== TokenType.NUMBER) {
                 throw new Error(`Syntax Error: Expected string or number in $in array, but got ${currentToken.value}`);
             }
@@ -101,42 +102,42 @@ export default function toSql(mongoQuery: string): string | null {
         }
     }
 
-    function* parseOperators(keyToken: MongoToken): IterableIterator<string> {
+    async function* parseOperators(keyToken: MongoToken): AsyncGenerator<string> {
         const fieldName = keyToken.value;
-        for (const operador of parseObject()) {
+        for await (const operador of parseObject()) {
             if (operador.type !== TokenType.OPERATOR) {
                 throw new Error(`Syntax Error: Expected an OPERATOR but got ${operador.type} (${operador.value})`);
             }
             const mongoOp = operador.value;
             if (mongoOp === '$in') {
-                const inValues = [...parseInOperators()];
+                const inValues = await AsyncIterable2Array(parseInOperators());
                 yield `${fieldName} IN (${inValues.join(', ')})`;
             } else { // Standard comparison operators like $gt, $ne
                 const sqlOperator = operatorMap[mongoOp];
                 if (!sqlOperator) {
                     throw new Error(`Unsupported MongoDB operator: ${mongoOp}`);
                 }
-                yield `${fieldName} ${sqlOperator} ${formatSqlValue(advance().value)}`;
+                yield `${fieldName} ${sqlOperator} ${formatSqlValue(((await advance())).value)}`;
             }
         }
     }
 
-    function* parseQueryObjectContent(): IterableIterator<string> {
-        for (const keyToken of parseObject()) {
+    async function* parseQueryObjectContent(): AsyncGenerator<string> {
+        for await (const keyToken of parseObject()) {
             // Case 1: Logical Operators ($and, $or)
             if (keyToken.type === 'OPERATOR' && (keyToken.value === '$and' || keyToken.value === '$or')) {
                 const logicalSqlOp = keyToken.value === '$and' ? 'AND' : 'OR';
 
-                const subConditions = [...parseLogicalOperators()];
+                const subConditions = await AsyncIterable2Array(parseLogicalOperators());
                 yield `(${subConditions.join(` ${logicalSqlOp} `)})`; // Join sub-conditions with the logical operator
                 // currentToken is already ']'
             }
             // Case 2: Field-based conditions (name: 'john', age: { $gt: 30 }, status: { $ne: 'deleted' }, tags: { $in: ['a', 'b'] })
             else if (keyToken.type === 'IDENTIFIER') {
-                advance();
+                await advance();
                 if (checkPunctuator('{')) {
                     // Sub-case 2.1: Operator conditions { field: { $op: value } }
-                    yield [...parseOperators(keyToken)].join(' AND ');
+                    yield (await AsyncIterable2Array(parseOperators(keyToken))).join(' AND ');
                 } else {
                     // Sub-case 2.2: Simple equality { field: value }
                     yield `${keyToken.value} = ${formatSqlValue(currentToken.value)}`;
@@ -158,25 +159,25 @@ export default function toSql(mongoQuery: string): string | null {
     try {
         // 1. Expect 'db'
         check({ type: TokenType.IDENTIFIER, value: 'db' });
-        advancePunctuator('.');
+        await advancePunctuator('.');
 
         // 2. Get collection name
-        collectionName = advance({ type: TokenType.IDENTIFIER }).value;
-        advancePunctuator('.');
+        collectionName = (await advance({ type: TokenType.IDENTIFIER })).value;
+        await advancePunctuator('.');
 
         // 3. Expect 'find'
-        advance({ type: TokenType.IDENTIFIER, value: 'find' });
-        advancePunctuator('(');
+        await advance({ type: TokenType.IDENTIFIER, value: 'find' });
+        await advancePunctuator('(');
 
         // 4. Process the query object (WHERE clause)
-        whereConditions = [...parseQueryObjectContent()]; // Initial call for the main query object
+        whereConditions = await AsyncIterable2Array(parseQueryObjectContent()); // Initial call for the main query object
 
         // 5. Process projection (SELECT fields) - Optional
-        advance(); // Can be ',' for projection or ')' to close find
+        await advance(); // Can be ',' for projection or ')' to close find
 
         if (checkPunctuator(',')) {
-            for (const fieldNameToken of parseObject()) {
-                const includeExcludeToken = advance({ type: TokenType.NUMBER }); // 1 or 0
+            for await (const fieldNameToken of parseObject()) {
+                const includeExcludeToken = await advance({ type: TokenType.NUMBER }); // 1 or 0
                 if (includeExcludeToken.value === 1) {
                     selectFields.push(fieldNameToken.value);
                 } else if (fieldNameToken.value === '_id' && includeExcludeToken.value === 0) {
@@ -185,14 +186,14 @@ export default function toSql(mongoQuery: string): string | null {
                     throw new Error("Syntax Error: Mixed projection (0 and 1) not fully supported, or unsupported exclusion type.");
                 }
             }
-            advancePunctuator(')'); // Close the find parenthesis after projection
+            await advancePunctuator(')'); // Close the find parenthesis after projection
         } else if (checkPunctuator(')')) {
             // No projection, the token is already ')'
         } else {
             throw new Error(`Syntax Error: Expected ',' or ')' after query object, but got ${currentToken ? currentToken.value : 'EOF'}`);
         }
 
-        advancePunctuator(';'); // Expect the final semicolon
+        await advancePunctuator(';'); // Expect the final semicolon
 
         // 6. Build the SQL query
         let sql = `SELECT ${selectFields.length > 0 ? selectFields.join(', ') : '*'}`;
