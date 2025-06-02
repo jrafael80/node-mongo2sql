@@ -8,3 +8,22 @@
 * **Query Validation:** Includes a robust lexer and parser that process the MongoDB query, ensuring its structure and detecting syntax errors before translation.
 * **Security:** The tokenization and parsing process actively mitigates risks associated with `eval()` or code injection by safely processing input.
 * **Extensible:** The lexer/parser/translator architecture allows for easy extension to support new MongoDB operators or SQL functionalities.
+
+
+## Usage
+
+To run this tool from the command line, you can pipe a MongoDB query string into its standard input. The translated SQL will then print directly to your console.
+
+**Example:**
+
+```bash
+echo "db.users.find({ age: { \$gt: 25 } });" | npm start
+```
+
+## Contributing
+
+Contributions are welcome! If you find a bug, have a suggestion for improvement, or want to add support for new operators or functionalities, feel free to open an issue or submit a pull request.
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for more details.

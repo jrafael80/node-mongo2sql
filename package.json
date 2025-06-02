@@ -4,7 +4,7 @@
   "description": "Developed in TypeScript for Node.js environments, this project serves as a robust tool for converting MongoDB queries into equivalent SQL statements.",
   "main": "index.js",
   "scripts": {
-    "cli": "ts-node src/index.ts",
+    "start": "ts-node src/index.ts",
     "test": "jest"
   },
   "keywords": [
