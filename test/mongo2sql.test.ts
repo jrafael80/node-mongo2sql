@@ -5,9 +5,9 @@ import { asyncMongoLexer } from '../src/mongo';
 
 describe.each([
   ['sync', (input: string) => Promise.resolve(toSql(input))],
-  ['async', (input: string) => asyncToSql(string2Stream(input))],
+  ['async', (input: string) => asyncToSql(string2Stream(input)).next().then(item => item.value)],
 ])
-  ('Mongo %s Lexer Tests', (type, lexer) => {
+  ('Mongo %s Lexer Tests', (type, toSql) => {
 
     it.each([
         ["db.users.find({ });", "SELECT * FROM users;"],
@@ -21,7 +21,7 @@ describe.each([
         ["db.customers.find({ $and: [ { isActive: true }, { $or: [ { city: 'NY' }, { zip: '10001' } ] } ] });", "SELECT * FROM customers WHERE ((isActive = TRUE) AND (((city = 'NY') OR (zip = '10001'))));"]
     ])('should translate a %s to %s', async (mongoQuery, sqlQuery) => {
         
-        const sql = toSql(mongoQuery);
+        const sql = await toSql(mongoQuery);
         expect(sql).toBe(sqlQuery);
     });
 
